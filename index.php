@@ -188,7 +188,7 @@ if(isset($_SESSION['url'])){
       <?endif?>
 
       <form role="form" id="feed">
-        <p><label for="url" class="neat">URL of album</label> <input type="url" class="neat" id="url" name="url" value="<?=isset($_SESSION['url']) ? urldecode($_SESSION['url']) : ""?>" />
+        <p><label for="url" class="neat">URL of album</label> <input type="url" class="neat" id="url" name="url" value="<?=isset($_SESSION['url']) ? urldecode($_SESSION['url']) : "http://img.amy.gy/food"?>" />
         <input type="submit" value="Get" /></p>
       </form>
 
