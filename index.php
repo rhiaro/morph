@@ -108,7 +108,7 @@ function post_to_endpoint($json, $endpoint){
   $ch = curl_init($endpoint);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
   curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-Type: application/activity+json"));
-  curl_setopt($ch, CURLOPT_HTTPHEADER, array("Authorization: ".$_SESSION['access_token']));
+  curl_setopt($ch, CURLOPT_HTTPHEADER, array("Authorization: ".$_SESSION['key']));
   curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
   $response = Array();
   parse_str(curl_exec($ch), $response);
@@ -129,13 +129,14 @@ if(isset($_GET['url'])){
   $_SESSION['url'] = $_GET['url'];
 }
 
+if(isset($_POST) && !empty($_POST)){
+  $topost = form_to_update($_POST);
+  $result = post_to_endpoint($topost, urldecode($_SESSION['ep']));
+}
+
 // Fetch feed
 if(isset($_SESSION['url'])){
   $asfeed = get_feed();
-}
-
-if(isset($_POST) && !empty($_POST)){
-  $result = form_to_update($_POST);
 }
 
 ?>
@@ -170,10 +171,14 @@ if(isset($_POST) && !empty($_POST)){
       
       <?if(isset($result)):?>
         <div>
+          <p>Posted activity:</p>
+          <pre>
+            <? echo $topost; ?>
+          </pre>
           <p>The response from the server:</p>
           <code><?=$_SESSION['ep']?></code>
           <pre>
-            <? echo $result; ?>
+            <? var_dump($result); ?>
           </pre>
         </div>
       <?endif?>
@@ -187,7 +192,8 @@ if(isset($_POST) && !empty($_POST)){
 
         <form method="post">
           <h2><input class="neat" type="text" id="name" name="name" value="<?=isset($asfeed["name"]) ? $asfeed["name"] : "Untitled" ?>" /></h2>
-          <p><input class="neat" type="datetime" name="published" id="published" value="<?=isset($asfeed["published"]) ? $asfeed["published"] : date(DATE_ATOM)?>" /> <input type="submit" value="Save" /></p>
+          <p><label class="neat" for="summary">Description</label> <input class="neat" type="text" name="summary" id="summary" value="<?=isset($asfeed["summary"]) ? $asfeed["summary"] : ""?>" /></p>
+          <p><label class="neat" for="published">Published</label> <input class="neat" type="datetime" name="published" id="published" value="<?=isset($asfeed["published"]) ? $asfeed["published"] : date(DATE_ATOM)?>" /> <input type="submit" value="Save" /></p>
           <input type="hidden" name="id" value="<?=$asfeed["id"]?>" />
         </form>
 
