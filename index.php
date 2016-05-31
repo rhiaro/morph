@@ -155,7 +155,7 @@ if(isset($_SESSION['url'])){
   <body>
     <main class="w1of2 center">
       <h1>morph</h1>
-      <p>ActivityPub update client.</p>
+      <p>ActivityPub update client. Read <a href="http://rhiaro.co.uk/2016/05/minimal">Minimal ActivityPub Update</a> to see an outline of how to build a receiving endpoint.</p>
 
       <?if(!isset($_SESSION['key']) || !isset($_SESSION['ep'])):?>
         <p class="fail">Don't forget to <a href="#key">'log in'</a> with your secret token and give me a pointer to your outbox endpoint.</p>
@@ -176,10 +176,14 @@ if(isset($_SESSION['url'])){
             <? echo $topost; ?>
           </pre>
           <p>The response from the server:</p>
-          <code><?=$_SESSION['ep']?></code>
-          <pre>
-            <? var_dump($result); ?>
-          </pre>
+          <?if(empty($result)):?>
+            <p class="fail">Empty :(</p>
+          <?else:?>
+            <code><?=$_SESSION['ep']?></code>
+            <pre>
+              <? var_dump($result); ?>
+            </pre>
+          <?endif?>
         </div>
       <?endif?>
 
