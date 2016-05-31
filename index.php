@@ -28,7 +28,7 @@ function discover_endpoint($url, $rel="micropub"){
 
 function context(){
   return array(
-      "@context" => array("as" => "http://www.w3.org/ns/activitystreams#", "blog" => "http://vocab.amy.so/blog#")
+      "@context" => array("http://www.w3.org/ns/activitystreams#")
     );
 }
 
@@ -60,6 +60,7 @@ function is_image($item){
   return false;
 }
 
+
 function id_from_object($object){
   return $object["id"];
 }
@@ -68,15 +69,38 @@ function arrayids_to_string($array){
   return implode(",", $flat);
 }
 
-function form_to_json($post){
+function url_to_objectid($url){
+  return array("id" => trim($url));
+}
+function url_strings_to_array($urls){
+  $ar = explode(",", $urls);
+  return array_map("url_to_objectid", $ar);
+}
+
+function form_to_update($post){
   $context = context();
-  $data = array_merge($context, $post);
-  unset($data['obtain']);
-  $data["@type"] = array("blog:Acquisition");
-  $data['as:published'] = $post['year']."-".$post['month']."-".$post['day']."T".$post['time'].$post['zone'];
-  unset($data['year']); unset($data['month']); unset($data['day']); unset($data['time']); unset($data['zone']);
-  if(isset($post['image'])) $data['as:image'] = array("@id" => $post['image'][0]);
-  $json = stripslashes(json_encode($data, JSON_PRETTY_PRINT));
+  $type = array("type" => "Update");
+  $data = array_merge($context, $type);
+  $data['name'] = "Updated an object";
+  $data['published'] = date(DATE_ATOM);
+  $data['object'] = $post;
+  unset($data['object']['submit']);
+  
+  // TODO: Should really handle empty values on the server end I think. 
+  //       ie. It shouldn't set new attributes on the server it receives empty values for attributes that weren't previously set.
+  //       Depends on replace/update policy
+  // foreach($post as $k => $v){
+  //   if(empty($v) || $v == ""){
+  //     unset($data[$k]);
+  //   }
+  // }
+
+  if(isset($data['object']['tags'])){
+    $data['object']['tag'] = url_strings_to_array($data['object']['tags']);
+    unset($data['object']['tags']);
+  }
+
+  $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
   return $json;
 }
 
@@ -110,13 +134,8 @@ if(isset($_SESSION['url'])){
   $asfeed = get_feed();
 }
 
-if(isset($_POST['obtain'])){
-  if(isset($_SESSION['me'])){
-    $endpoint = discover_endpoint($_SESSION['me']);
-    $result = post_to_endpoint(form_to_json($_POST), $endpoint);
-  }else{
-    $errors["Not signed in"] = "You need to sign in to post.";
-  }
+if(isset($_POST) && !empty($_POST)){
+  $result = form_to_update($_POST);
 }
 
 ?>
@@ -127,6 +146,10 @@ if(isset($_POST['obtain'])){
     <link rel="stylesheet" type="text/css" href="https://apps.rhiaro.co.uk/css/normalize.min.css" />
     <link rel="stylesheet" type="text/css" href="https://apps.rhiaro.co.uk/css/main.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+     h2 input { font-weight: bold; }
+     form#feed { border-bottom: 1px solid silver; }
+    </style>
   </head>
   <body>
     <main class="w1of2 center">
@@ -134,7 +157,7 @@ if(isset($_POST['obtain'])){
       <p>ActivityPub update client.</p>
 
       <?if(!isset($_SESSION['key']) || !isset($_SESSION['ep'])):?>
-        <p class="fail">Don't forget to 'log in' with your secret token and give me a pointer to your outbox endpoint.</p>
+        <p class="fail">Don't forget to <a href="#key">'log in'</a> with your secret token and give me a pointer to your outbox endpoint.</p>
       <?endif?>
       
       <?if(isset($errors)):?>
@@ -148,24 +171,29 @@ if(isset($_POST['obtain'])){
       <?if(isset($result)):?>
         <div>
           <p>The response from the server:</p>
-          <code><?=$endpoint?></code>
+          <code><?=$_SESSION['ep']?></code>
           <pre>
-            <? var_dump($result); ?>
+            <? echo $result; ?>
           </pre>
         </div>
       <?endif?>
 
       <form role="form" id="feed">
-        <p><label for="url" class="neat">Feed of stuff</label> <input type="url" class="neat" id="url" name="url" value="<?=isset($_SESSION['url']) ? urldecode($_SESSION['url']) : ""?>" />
+        <p><label for="url" class="neat">URL of album</label> <input type="url" class="neat" id="url" name="url" value="<?=isset($_SESSION['url']) ? urldecode($_SESSION['url']) : ""?>" />
         <input type="submit" value="Get" /></p>
       </form>
 
       <?if(isset($asfeed)):?>
-        <h2><?=isset($asfeed["name"]) ? $asfeed["name"] : "Feed" ?></h2>
-        <?=isset($asfeed["published"]) ? "<p>".$asfeed["published"]."</p>" : ""?>
+
+        <form method="post">
+          <h2><input class="neat" type="text" id="name" name="name" value="<?=isset($asfeed["name"]) ? $asfeed["name"] : "Untitled" ?>" /></h2>
+          <p><input class="neat" type="datetime" name="published" id="published" value="<?=isset($asfeed["published"]) ? $asfeed["published"] : date(DATE_ATOM)?>" /> <input type="submit" value="Save" /></p>
+          <input type="hidden" name="id" value="<?=$asfeed["id"]?>" />
+        </form>
+
         <?if((is_array($asfeed["type"]) && in_array("Collection", $asfeed["type"])) || $asfeed["type"] == "Collection"):?>
           <?foreach($asfeed["items"] as $i => $item):?>
-            <div class="w1of1 clearfix">
+            <form class="w1of1 clearfix" method="post" id="<?=$i?>" action="#<?=$i?>">
               <div class="w1of2"><div class="inner">
                 <?if(is_image($item)):?>
                   <img src="<?=$item["id"]?>" title="<?=$item["id"]?>" alt="<?=$item["id"]?>" />
@@ -174,56 +202,25 @@ if(isset($_POST['obtain'])){
                 <?endif?>
               </div></div>
               <div class="w1of2"><div class="inner">
-                <p><label class="neat" for="name<?=$i?>">Name</label> <input class="neat" type="text" name="name<?=$i?>" id="name<?=$i?>" value="<?=isset($item["name"]) ? $item["name"] : ""?>" /></p>
-                <p><label class="neat" for="published<?=$i?>">Published</label> <input class="neat" type="text" name="published<?=$i?>" id="published<?=$i?>" value="<?=isset($item["published"]) ? $item["published"] : ""?>" /></p>
-                <p><label class="neat" for="tags<?=$i?>">Tags</label> <input class="neat" type="text" name="tags<?=$i?>" id="tags<?=$i?>" value="<?=isset($item["tag"]) ? arrayids_to_string($item["tag"]) : ""?>" /></p>
+
+                <p><label class="neat" for="name<?=$i?>">Name</label> <input class="neat" type="text" name="name" id="name<?=$i?>" value="<?=isset($item["name"]) ? $item["name"] : ""?>" /></p>
+                <p><label class="neat" for="published<?=$i?>">Published</label> <input class="neat" type="text" name="published" id="published<?=$i?>" value="<?=isset($item["published"]) ? $item["published"] : ""?>" /></p>
+                <p><label class="neat" for="tags<?=$i?>">Tags</label> <input class="neat" type="text" name="tags" id="tags<?=$i?>" value="<?=isset($item["tag"]) ? arrayids_to_string($item["tag"]) : ""?>" /></p>
+                <input type="hidden" name="id" value="<?=$item["id"]?>" />
+                <p><input type="submit" value="Update" /></p>
               </div></div>
-            </div>
+            </form>
           <?endforeach?>
+        <?else:?>
+          <p class="fail">I only understand Collections so far.. Stand by.</p>
         <?endif?>
+
+      <?else:?>
+
+        <p class="fail">Could not find a valid AS2 feed here.</p>
+
       <?endif?>
 
-      <!---
-      <form method="post" role="form" id="obtain">
-        <p><input type="submit" value="<?=isset($_GET['post']) ? "Update" : "Post"?>" class="neat" name="obtain" /></p>
-        <p><label for="summary" class="neat">Description</label> <input type="text" name="as:summary" id="summary" class="neat"<?=isset($upd_descr) ? 'value="'.$upd_descr.'"' : ""?> /></p>
-        <p><label for="cost" class="neat">Cost</label> <input type="text" name="blog:cost" id="cost"class="neat"<?=isset($upd_cost) ? 'value="'.$upd_cost.'"' : ""?> /></p>
-        <p><label for="tags" class="neat">Tags</label> <input type="text" name="as:tag" id="tags"class="neat"<?=isset($upd_tag) ? 'value="'.$upd_tag.'"' : ""?> /></p>
-        <p>
-          <select name="year" id="year">
-            <option value="2016"<?isset($upd_year) && ($upd_year == "2016") ? " selected" : ""?>>2016</option>
-            <option value="2015"<?isset($upd_year) && ($upd_year == "2015") ? " selected" : ""?>>2015</option>
-          </select>
-          <select name="month" id="month">
-            <?for($i=1;$i<=12;$i++):?>
-              <option value="<?=date("m", strtotime("2016-$i-01"))?>"
-              <?if(!isset($upd_month)):?>
-                <?=(date("n") == $i) ? " selected" : ""?>
-              <?else:?>
-                <?=($upd_month == $i) ? " selected" : ""?>
-              <?endif?>><?=date("M", strtotime("2016-$i-01"))?></option>
-            <?endfor?>
-          </select>
-          <select name="day" id="day">
-            <?for($i=1;$i<=31;$i++):?>
-              <option value="<?=date("d", strtotime("2016-01-$i"))?>"
-              <?if(!isset($upd_day)):?>
-                <?=(date("j") == $i) ? " selected" : ""?>
-              <?else:?>
-                <?=($upd_day == $i) ? " selected" : ""?>
-              <?endif?>><?=date("d", strtotime("2016-01-$i"))?></option>
-            <?endfor?>
-          </select>
-          <input type="text" name="time" id="time" value="<?=isset($upd_time) ? $upd_time : date("H:i:s")?>" />
-          <input type="text" name="zone" id="zone" value="<?=isset($upd_tz) ? $upd_tz : date("P")?>" />
-        </p>
-        <ul class="clearfix">
-          <?foreach($images as $image):?>
-            <li class="w1of5"><p><input type="radio" name="image[]" id="image" value="<?=$image?>" <?=isset($upd_image) && $upd_image == $image ? " checked" : ""?> /> <label for="image"><img title="<?=$image?>" src="https://images1-focus-opensocial.googleusercontent.com/gadgets/proxy?url=<?=$image?>&container=focus&resize_w=200&refresh=2592000" width="100px" /></label></p></li>
-          <?endforeach?>
-        </ul>
-      </form>
-      -->
       <div class="color3-bg inner">
         <form role="form" id="config" class="wee">
           <p><label for="key" class="neat">Key: </label><input type="text" value="<?=isset($_SESSION['key']) ? $_SESSION['key'] : ""?>" class="neat" name="key" id="key" /> <a href="?reset=key">Reset</a></p>
