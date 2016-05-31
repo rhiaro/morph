@@ -225,8 +225,7 @@ if(isset($_SESSION['url'])){
           <p class="fail">I only understand Collections so far.. Stand by.</p>
         <?endif?>
 
-      <?else:?>
-
+      <?elseif(isset($_SESSION['url'])):?>
         <p class="fail">Could not find a valid AS2 feed here.</p>
 
       <?endif?>
